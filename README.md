@@ -1,0 +1,2 @@
+# TrustPositif-Validator
+High-performance, standards-compliant domain validation and aggregation pipeline for TrustPositif/Komdigi and public blocklists. Validates against the official IANA Root Zone Database and RFC 1034, RFC 1035, RFC 1123, RFC 3490, and RFC 5890, with full IDN/Punycode support. Automatically filters invalid domains, IPv4/IPv6 addresses, malformed entries, common prefixes, and duplicates to generate deterministic, DNS/RPZ-ready blocklists optimized for production-scale automated deployments. ShellCheck Certified & Audited.
