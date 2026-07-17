@@ -258,7 +258,7 @@ Edit the `TRUSTPOSITIF_URLS` array in the script:
 
 ```bash
 TRUSTPOSITIF_URLS=(
-    "https://trustpositif.komdigi.go.id/assets/db/domains_isp"
+    "https://repo.alsyundawy.com/TrustPositif/domains_isp"
     "https://example.com/my-custom-blocklist.txt"
     "https://another-source.net/domains.txt"
 )
