@@ -13,8 +13,8 @@
 #                serta cron-friendly.
 # Author       : HARRY DERTIN SUTISNA ALSYUNDAWY
 # Created Date : 07 APRIL 2024
-# Last Modified: 17 JULI 2026
-# Version      : TrustPositif_Validator-1.0.2-ALSYUNDAWY-2026-07-17
+# Last Modified: 27 JULI 2026
+# Version      : TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27
 # Usage        : bash TrustPositif-Validator.sh
 #
 # TUTORIAL SINGKAT:
@@ -25,14 +25,15 @@
 #   NUM_CORES=8 CHUNK_SIZE=28000 bash TrustPositif-Validator.sh
 #   CUT_SUBDOMAINS=1 bash TrustPositif-Validator.sh
 #
-# DOCNOTE v1.0.2:
-#   Versi 1.0.2 melanjutkan basis v1.0.1 dengan sejumlah perbaikan portabilitas
-#   dan keamanan: penambahan deteksi RAM native FreeBSD via sysctl hw.physmem,
-#   penjaminan portabilitas SORT_BUFFER (mengganti "50%" dengan nilai absolut
-#   pada platform non-GNU), penggantian 'sort -z' (NUL-delimited, tidak didukung
-#   BSD sort) dengan pipeline POSIX-compatible, pemindahan DOMAIN_FILE ke dalam
-#   TEMP_DIR untuk keamanan dan kebersihan CWD, perlindungan aritmetika
-#   page_size di show_system_resources, serta perbaikan typo dokumentasi.
+# DOCNOTE v1.0.3:
+#   Versi 1.0.3 menyempurnakan v1.0.2 dengan optimasi parsing & hardening:
+#   perbaikan urutan sanitasi URL (path/query/hash/AdGuard dipotong sebelum
+#   pemeriksaan port agar domain bertipe 'host:8080/path' tidak terbuang),
+#   penambahan sanitasi sintaks AdGuard/Hosts blocklist (`||`, `*`, leading dots,
+#   suffix `^`, `$options`), pendeteksian IPv6 hosts prefix (`::`, `::1`,
+#   `0:0:0:0:0:0:0:1`, `fe80::`), garansi atomic write lintas filesystem melalui
+#   staging file di OUTPUT_DIR, proteksi SORT_BUFFER persentase pada BSD sort,
+#   serta pemantauan RAM native FreeBSD lengkap di show_system_resources.
 # ============================================================
 
 clear 2>/dev/null || true
@@ -83,7 +84,7 @@ declare -A BG_COLORS=(
 
 SCRIPT_NAME="TrustPositif-Validator.sh"
 # --- Versi script ---
-SCRIPT_VERSION="TrustPositif_Validator-1.0.2-ALSYUNDAWY-2026-07-17"
+SCRIPT_VERSION="TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27"
 OUTPUT_DIR="${OUTPUT_DIR:-/var/www/html/trustpositif}"
 VALID_OUTPUT="${OUTPUT_DIR}/domain-trustpositif_valid.txt"
 VALID_OUTPUT_TMP=""
@@ -211,6 +212,13 @@ if [[ -z ${SORT_BUFFER-} ]]; then
 	fi
 fi
 
+# Validasi portabilitas SORT_BUFFER jika di-set manual dengan persentase pada BSD sort
+if [[ ${SORT_BUFFER-} == *%* ]] && ! sort --version 2>/dev/null | grep -q 'GNU'; then
+	calc_half_mem=$((TOTAL_MEM_MIB / 2))
+	if ((calc_half_mem < 512)); then calc_half_mem=512; fi
+	SORT_BUFFER="${calc_half_mem}M"
+fi
+
 CUT_SUBDOMAINS="${CUT_SUBDOMAINS:-0}"
 case "${CUT_SUBDOMAINS}" in
 1 | true | TRUE | yes | YES | on | ON) CUT_SUBDOMAINS=1 ;;
@@ -279,7 +287,7 @@ show_banner() {
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[MAGENTA]}     SCRIPT INI DIBUAT & DIMODIFIKASI OLEH HARRY DS ALSYUNDAWY          ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[YELLOW]}       ALSYUNDAWY@GMAIL.COM | 08568515212 | ALSYUNDAWY.COM              ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[GREEN]}                DIBUAT PADA TANGGAL 07 APRIL 2024                       ${COLORS[CYAN]}##${COLORS[NC]}"
-	printf '%s\n' "${COLORS[CYAN]}##${COLORS[RED]}        DIPERBAIKI / REVISI TERAKHIR PADA TANGGAL 17 JULI 2026           ${COLORS[CYAN]}##${COLORS[NC]}"
+	printf '%s\n' "${COLORS[CYAN]}##${COLORS[RED]}        DIPERBAIKI / REVISI TERAKHIR PADA TANGGAL 27 JULI 2026           ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[NC]}                                                                        ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}############################################################################${COLORS[NC]}"
 	echo ""
@@ -289,7 +297,7 @@ show_banner() {
 	print_colored "CYAN" "================================================================================" "BG_BLUE"
 	print_colored "YELLOW" "  - Nama Script     : ${SCRIPT_NAME}" "BG_BLUE"
 	print_colored "YELLOW" "  - Deskripsi       : Validasi domain TrustPositif terhadap TLD IANA & RFC." "BG_BLUE"
-	print_colored "YELLOW" "  - Fungsi Utama    : Download, sanitasi prefix, filter IPv4/IPv6, dedupe." "BG_BLUE"
+	print_colored "YELLOW" "  - Fungsi Utama    : Download, sanitasi prefix, filter IPv4/IPV6, dedupe." "BG_BLUE"
 	print_colored "YELLOW" "  - Optimasi        : Multi-source, AWK fallback, atomic output, hardening." "BG_BLUE"
 	print_colored "YELLOW" "  - Output          : Daftar domain valid siap pakai untuk DNS/RPZ/blocklist." "BG_BLUE"
 	print_colored "YELLOW" "  - Pembuat         : HARRY DERTIN SUTISNA ALSYUNDAWY" "BG_BLUE"
@@ -297,7 +305,7 @@ show_banner() {
 	print_colored "YELLOW" "  - Dibuat          : 07 APRIL 2024" "BG_BLUE"
 	print_colored "YELLOW" "  - Versi           : ${SCRIPT_VERSION}" "BG_BLUE"
 	print_colored "YELLOW" "  - Platform        : Linux (semua distro) | macOS | FreeBSD" "BG_BLUE"
-	print_colored "YELLOW" "  - Terakhir Diubah : 17 JULI 2026" "BG_BLUE"
+	print_colored "YELLOW" "  - Terakhir Diubah : 27 JULI 2026" "BG_BLUE"
 	print_colored "CYAN" "================================================================================" "BG_BLUE"
 }
 
@@ -306,6 +314,8 @@ show_system_resources() {
 	print_colored "YELLOW" " [SYS] Status Sistem - ${phase}" "BG_PURPLE"
 	local total_mem="unknown"
 	local avail_mem="unknown"
+	local uname_s
+	uname_s="$(uname 2>/dev/null || true)"
 
 	if command -v free &>/dev/null; then
 		local line_count=0
@@ -318,7 +328,7 @@ show_system_resources() {
 			line_count=$((line_count + 1))
 			if ((line_count > 10)); then break; fi
 		done < <(free -h 2>/dev/null || true)
-	elif command -v sysctl &>/dev/null && [[ "$(uname 2>/dev/null || true)" == "Darwin" ]]; then
+	elif command -v sysctl &>/dev/null && [[ ${uname_s} == "Darwin" ]]; then
 		local mem_bytes
 		mem_bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 0)"
 		if [[ ${mem_bytes} =~ ^[0-9]+$ && ${mem_bytes} -gt 0 ]]; then
@@ -331,6 +341,21 @@ show_system_resources() {
 			if [[ ${page_size} =~ ^[0-9]+$ && ${page_size} -gt 0 &&
 				  ${free_pages} =~ ^[0-9]+$ && ${inactive_pages} =~ ^[0-9]+$ ]]; then
 				local avail_bytes=$(((free_pages + inactive_pages) * page_size))
+				avail_mem="$((avail_bytes / 1024 / 1024))MB"
+			else
+				avail_mem="unknown"
+			fi
+		fi
+	elif command -v sysctl &>/dev/null && [[ ${uname_s} == "FreeBSD" ]]; then
+		local mem_bytes
+		mem_bytes="$(sysctl -n hw.physmem 2>/dev/null || echo 0)"
+		if [[ ${mem_bytes} =~ ^[0-9]+$ && ${mem_bytes} -gt 0 ]]; then
+			total_mem="$((mem_bytes / 1024 / 1024 / 1024))GB"
+			local page_size free_pages
+			page_size="$(sysctl -n hw.pagesize 2>/dev/null || echo 0)"
+			free_pages="$(sysctl -n vm.stats.vm.v_free_count 2>/dev/null || echo 0)"
+			if [[ ${page_size} =~ ^[0-9]+$ && ${page_size} -gt 0 && ${free_pages} =~ ^[0-9]+$ ]]; then
+				local avail_bytes=$((free_pages * page_size))
 				avail_mem="$((avail_bytes / 1024 / 1024))MB"
 			else
 				avail_mem="unknown"
@@ -715,13 +740,12 @@ force_cleanup() {
 			kill "${pid}" 2>/dev/null || true
 		done < <(pgrep -f -- "${SCRIPT_NAME}" 2>/dev/null || true)
 	fi
-	find /tmp -maxdepth 1 -type d -name "${SCRIPT_BASENAME}.*" -exec rm -rf -- {} + 2>/dev/null || true
+	find "${TMPDIR:-/tmp}" /tmp -maxdepth 1 -type d -name "${SCRIPT_BASENAME}.*" -exec rm -rf -- {} + 2>/dev/null || true
 	rm -f -- "${DOMAIN_FILE}" "${VALID_OUTPUT}.tmp" "${VALID_OUTPUT}.tmp."[0-9]* 2>/dev/null || true
 	log_success "Cleanup selesai. Sistem bersih."
 }
 
-# shellcheck disable=SC2154
-trap 'status=$?; cleanup "$status"; exit "$status"' EXIT
+trap 'cleanup $?' EXIT
 trap 'cleanup 130; exit 130' INT
 trap 'cleanup 143; exit 143' TERM
 
@@ -772,19 +796,23 @@ process_chunk() {
         sub(/[ \t]+$/, "", domain)
         if (domain == "") next
 
-        sub(/^[ \t]*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|::1)[ \t]+/, "", domain)
+        sub(/^[ \t]*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|::1?|0:0:0:0:0:0:0:1|fe80::[0-9a-fA-F%]+)[ \t]+/, "", domain)
         sub(/^[*|]+/, "", domain)
+
+        # Pembersihan path, query string, hash, serta opsi AdGuard sebelum penanganan port
+        sub(/[\/\^\$\?#].*$/, "", domain)
+
         sub(/:[0-9]+$/, "", domain)
         if (domain == "") next
         if (index(domain, ":") > 0) next
         if (domain ~ /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/) next
 
         domain_l = tolower(domain)
+        sub(/^\.+/,    "", domain_l)
         sub(/^www\./,  "", domain_l)
         sub(/^mail\./, "", domain_l)
         sub(/^1\./,    "", domain_l)
         sub(/^0\./,    "", domain_l)
-        sub(/[\/\^ \t].*$/, "", domain_l)
         sub(/\.$/, "", domain_l)
         gsub(/[^a-z0-9.-]/, "", domain_l)
         if (domain_l == "") next
@@ -900,8 +928,12 @@ main() {
 	validate_nonempty_file "${work_output_tmp}" "Hasil validasi otomatis" || exit 1
 	processed_count=$(wc -l <"${work_output_tmp}")
 
-	# Fase Pembersihan Manual (DOMAINS_TO_CLEAN) dinonaktifkan sesuai request
-	mv -f -- "${work_output_tmp}" "${VALID_OUTPUT}"
+	# Atomic file replace: buat staging file di OUTPUT_DIR sebelum mv agar 100% atomic
+	# meskipun TEMP_DIR dan OUTPUT_DIR berada pada mount point / filesystem yang berbeda.
+	VALID_OUTPUT_TMP="${VALID_OUTPUT}.tmp.$$"
+	cp -f -- "${work_output_tmp}" "${VALID_OUTPUT_TMP}"
+	mv -f -- "${VALID_OUTPUT_TMP}" "${VALID_OUTPUT}"
+	VALID_OUTPUT_TMP=""
 
 	final_count=$(wc -l <"${VALID_OUTPUT}")
 	final_file_size=$(du -h "${VALID_OUTPUT}" | cut -f1)
@@ -965,6 +997,24 @@ CARA PENGGUNAAN:
   NUM_CORES=8 CHUNK_SIZE=28000 bash TrustPositif-Validator.sh
 
 CHANGELOG:
+  v1.0.3 (27 JULI 2026) - Hardening Validasi Blocklist & Atomic Output:
+    - [FIX]   Urutan Sanitasi Path & Port: Memindahkan pemotongan path, query string, hash,
+              dan opsi AdGuard (`/`, `^`, `$`, `?`, `#`) sebelum pemeriksaan port dan titik dua.
+              Ini memperbaiki bug di mana domain bertipe `example.com:8080/path` sebelumnya dibuang.
+    - [BARU]  Support Syntax Blocklist: Sanitasi prefix `||`, `*`, leading dots (`.`), serta
+              suffix AdGuard (`^`, `$options`) sehingga blocklist modern dapat diproses sempurna.
+    - [FIX]   IPv6 Hosts Prefix Filtering: Memperluas pembuangan prefix IPv6 pada format file hosts
+              (`::`, `::1`, `0:0:0:0:0:0:0:1`, `fe80::`).
+    - [FIX]   Cross-Filesystem Atomic Write: Menggunakan staging file `VALID_OUTPUT_TMP` di dalam
+              `OUTPUT_DIR` sebelum `mv` sehingga penggantian output 100% atomic walaupun `/tmp` dan
+              `OUTPUT_DIR` berada pada mount point / filesystem yang berbeda.
+    - [FIX]   SORT_BUFFER BSD Sort Safety: Validasi otomatis `SORT_BUFFER` bertanda `%` pada BSD sort
+              (macOS/FreeBSD) agar dikonversi ke MiB absolut untuk mencegah crash.
+    - [BARU]  FreeBSD System Resources: Menambahkan pemantauan RAM & halaman memori native FreeBSD
+              pada fungsi `show_system_resources`.
+    - [FIX]   force_cleanup Portability: Memperluas pembersihan temp folder ke `$TMPDIR` dan `/tmp`.
+    - [LINT]  100% lulus uji ShellCheck tanpa peringatan.
+
   v1.0.2 (17 JULI 2026) - Portabilitas & Security Hardening:
     - [FIX]   Portabilitas sort: Mengganti 'sort -z' (NUL-delimited, tidak didukung BSD/macOS)
               dengan pipeline xargs + sort POSIX-compatible untuk pemrosesan chunk paralel.
@@ -975,18 +1025,13 @@ CHANGELOG:
     - [FIX]   DOMAIN_FILE Path Safety: Memindahkan DOMAIN_FILE dari CWD ke dalam TEMP_DIR
               untuk keamanan direktori kerja dan atomic cleanup.
     - [FIX]   page_size Guard: Menambahkan validasi regex ^[0-9]+$ pada page_size, free_pages,
-              dan inactive_pages sebelum operasi aritmetika di show_system_resources untuk
-              mencegah error pada set -e bila sysctl mengembalikan nilai kosong/non-numerik.
-    - [FIX]   mem_bytes Guard: Menambahkan validasi ^[0-9]+$ pada mem_bytes di show_system_resources
-              agar konsisten dengan pola validasi di get_mem_mib.
+              dan inactive_pages sebelum operasi aritmetika di show_system_resources.
     - [FIX]   Typo Dokumentasi: Memperbaiki 'KEBUTUUM' menjadi 'KEBUTUHAN' pada komentar inline.
-    - [LINT]  100% lulus ShellCheck tanpa peringatan baru.
+    - [LINT]  100% lulus ShellCheck tanpa peringatan.
 
   v1.0.1 (17 JULI 2026) - Kompatibilitas macOS & Perbaikan Validasi URL:
-    - [BARU]  Kompatibilitas macOS: Penambahan deteksi total RAM dan sisa RAM untuk macOS
-              secara native via sysctl/vm_stat.
-    - [FIX]   Validasi URL: Mengoptimalkan regex validasi URL sumber agar mendukung format URL
-              lengkap termasuk query parameters, port, dan hash.
+    - [BARU]  Kompatibilitas macOS: Penambahan deteksi total RAM dan sisa RAM untuk macOS native.
+    - [FIX]   Validasi URL: Mengoptimalkan regex validasi URL sumber agar mendukung format URL lengkap.
     - [LINT]  Memastikan kode tetap 100% bebas warning ShellCheck.
 
   v1.0.0 (15 JULI 2026) - Initial Base Release:
@@ -1037,7 +1082,7 @@ case "${1-}" in
 esac
 
 # ============================================================
-# AKHIR SCRIPT - TrustPositif-Validator.sh v1.0.2
+# AKHIR SCRIPT - TrustPositif-Validator.sh v1.0.3
 # ============================================================
 
 # ============================================================
@@ -1047,19 +1092,17 @@ esac
 # Script ini telah mengalami perbaikan dan optimasi menyeluruh untuk
 # meningkatkan performa, keamanan, dan kemudahan pemeliharaan:
 #
-# DOCNOTE v1.0.2:
-# +-- Input domain sekarang multi-source melalui TRUSTPOSITIF_URLS yang lebih ringkas.
-# +-- Pembersihan legacy DOMAINS_TO_CLEAN telah dihapus dari script untuk menekan
-#     overhead RAM, I/O, dan menjaga kerapian script.
-# +-- Deteksi RAM native untuk macOS (hw.memsize) dan FreeBSD (hw.physmem) via sysctl.
-# +-- Regex validasi URL mendukung format URL lengkap (query params, port, hash, dll).
-# +-- SORT_BUFFER otomatis portable: nilai absolut pada BSD/macOS, '50%' hanya di GNU sort.
-# +-- DOMAIN_FILE kini berada di dalam TEMP_DIR untuk keamanan CWD dan atomic cleanup.
-# +-- Pipeline chunk parallel menggunakan xargs+sort POSIX-compatible (tidak lagi sort -z).
-# +-- Guard aritmetika page_size/mem_bytes di show_system_resources untuk keamanan set -e.
+# DOCNOTE v1.0.3:
+# +-- Pembersihan path/query/hash/AdGuard (`/`, `^`, `$`, `?`, `#`) dilakukan sebelum penanganan port.
+# +-- Dukungan sanitasi sintaks AdGuard & Hosts blocklist (`||`, `*`, `.`, `^`, `$options`).
+# +-- Filter IPv6 hosts diperluas (`::`, `::1`, `0:0:0:0:0:0:0:1`, `fe80::`).
+# +-- Operasi penggantian file output 100% atomic lintas filesystem via staging file di OUTPUT_DIR.
+# +-- Proteksi otomatis SORT_BUFFER persentase jika dieksekusi dengan BSD sort (macOS/FreeBSD).
+# +-- Pemantauan RAM & Halaman Memori native FreeBSD di show_system_resources.
+# +-- force_cleanup membersihkan direktori temporary pada `$TMPDIR` dan `/tmp`.
 #
 # OPTIMASI PERFORMA:
-# +-- Deteksi Sumber Daya: kompatibel pada server normal dan macOS, proteksi RAM/cgroup untuk mesin kecil.
+# +-- Deteksi Sumber Daya: kompatibel pada server normal, macOS, dan FreeBSD, proteksi RAM/cgroup untuk mesin kecil.
 # +-- Ukuran Chunk Legacy-Compatible: default 20000 + (NUM_CORES * 1000).
 # +-- Penggunaan CPU: NUM_CORES mengikuti nproc dengan batas 4-32.
 # +-- AWK Auto-Fallback: mawk -> gawk -> awk lewat AWK_CMD tunggal.
@@ -1073,7 +1116,7 @@ esac
 # +-- Penanganan Error Komprehensif: Error handling di setiap fase kritis.
 # +-- Pembersihan Otomatis: Trap handler untuk EXIT, INT, TERM.
 # +-- Penanganan File Aman: Path validation dengan parameter expansion.
-# +-- Resource Limiting: Batas CPU/memory implisit melalui chunking.
+# +-- Resource Limits: Batas CPU/memory implisit melalui chunking.
 # +-- Keamanan Proses: Terminasi semua child process pada exit.
 # +-- Isolasi Temp Dir: Penggunaan mktemp untuk direktori sementara aman.
 # +-- Atomic Operations: Operasi file dengan atomic write patterns.
@@ -1106,7 +1149,7 @@ esac
 # +-- Code Structure Modular: Organisasi kode berdasarkan tanggung jawab.
 # +-- Version Control Ready: Struktur siap untuk SCM (Git/SVN).
 # +-- Maintainability Focus: Pola coding yang mudah dimodifikasi.
-# +-- Cross-Platform Support: Kompatibel dengan semua distribusi Linux modern dan macOS.
+# +-- Cross-Platform Support: Kompatibel dengan semua distribusi Linux modern, macOS, dan FreeBSD.
 #
 # ============================================================
 # CARA PENGGUNAAN SCRIPT
@@ -1150,7 +1193,7 @@ esac
 # ============================================================
 #
 # KEBUTUHAN SISTEM MINIMUM:
-# +-- OS: Linux (Ubuntu 20.04+/Debian 11+/CentOS 8+) atau macOS
+# +-- OS: Linux (Ubuntu 20.04+/Debian 11+/CentOS 8+), macOS, atau FreeBSD
 # +-- RAM: 512MB minimum (Direkomendasikan: 1GB+ untuk dataset besar)
 # +-- Penyimpanan: 100MB ruang kosong untuk file sementara
 # +-- CPU: 2 core minimum (Optimal: 4+ core untuk pemrosesan paralel)
@@ -1173,7 +1216,7 @@ esac
 #
 # VERIFIKASI INSTALASI:
 # bash TrustPositif-Validator.sh --version
-# # Output: TrustPositif-Validator.sh versi TrustPositif_Validator-1.0.1-ALSYUNDAWY-2026-07-17
+# # Output: TrustPositif-Validator.sh versi TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27
 #
 # ============================================================
 # KONFIGURASI DINAMIS DAN TUNING
@@ -1196,7 +1239,7 @@ esac
 #
 # BENCHMARK PERFORMA (sistem referensi: 8 core, 16GB RAM, SSD):
 # +-- Download Phase: 10-15 detik (tergantung bandwidth)
-# +-- Processing Phase: 30-60 detik untuk 1.5 juta domain (lebih cepat tanpa DOMAINS_TO_CLEAN)
+# +-- Processing Phase: 30-60 detik untuk 1.5 juta domain
 # +-- Cleanup Phase: < 1 detik
 # +-- Total Runtime: 1-1.5 menit
 # +-- Memory Usage: ~100MB (sangat efisien tanpa static array raksasa)
@@ -1336,7 +1379,7 @@ esac
 # +-- Pertahankan kompatibilitas mundur jika memungkinkan
 # +-- Sertakan benchmark performa untuk optimasi
 # +-- Gunakan pull request dengan deskripsi jelas
-# +-- Update riwayat versi untuk setiap perubahan signifikan
+# +-- Update riwayat versi untuk meperbarui versi
 #
 # HAK CIPTA DAN LISENSI:
 # Hak Cipta (c) 2024-2026 HARRY DERTIN SUTISNA ALSYUNDAWY

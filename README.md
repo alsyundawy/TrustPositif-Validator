@@ -6,8 +6,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![ShellCheck](https://img.shields.io/badge/ShellCheck-Certified-brightgreen.svg)](https://www.shellcheck.net)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20FreeBSD-informational.svg)](https://github.com/alsyundawy/TrustPositif-Validator)
-[![Version](https://img.shields.io/badge/Version-1.0.2-orange.svg)](https://github.com/alsyundawy/TrustPositif-Validator/releases)
+[![Version](https://img.shields.io/badge/Version-1.0.3-orange.svg)](https://github.com/alsyundawy/TrustPositif-Validator/releases)
 [![Standards](https://img.shields.io/badge/RFC-1034%20%7C%201035%20%7C%201123%20%7C%203490%20%7C%205890-lightgrey.svg)](https://github.com/alsyundawy/TrustPositif-Validator)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/alsyundawy)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://www.paypal.me/alsyundawy)
 
 ---
 
@@ -404,11 +406,20 @@ See [LICENSE](LICENSE) for full text.
 
 Jika Anda merasa terbantu dan ingin mendukung proyek ini, pertimbangkan untuk berdonasi. Terima kasih atas dukungannya!
 
-### Donasi via PayPal
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Dukung%20via%20Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/alsyundawy)
+[![PayPal](https://img.shields.io/badge/PayPal-Dukung%20via%20PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.me/alsyundawy)
 
-[Klik di sini untuk donasi via PayPal](https://www.paypal.me/alsyundawy)
+### ☕ Donasi via Ko-fi
 
-### Donasi via QRIS
+Dukung pengembangan script melalui Ko-fi:
+👉 **[ko-fi.com/alsyundawy](https://ko-fi.com/alsyundawy)**
+
+### 💳 Donasi via PayPal
+
+Dukung pengembangan script melalui PayPal:
+👉 **[paypal.me/alsyundawy](https://www.paypal.me/alsyundawy)**
+
+### 📱 Donasi via QRIS
 
 ![QRIS Donation](https://github.com/user-attachments/assets/a0126f28-6dde-43da-ba14-d7c9a27de0df)
 
