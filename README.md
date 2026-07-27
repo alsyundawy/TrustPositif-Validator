@@ -455,7 +455,8 @@ Dukung pengembangan script melalui PayPal:
 
 ## Analytics
 
-![Repobeats](https://repobeats.axiom.co/api/embed/06cb45618374fd127021d7c32321a60acabd626e.svg "Repobeats analytics image")
+![Alt](https://repobeats.axiom.co/api/embed/6b7b125eed96b38e50694c919ab25e0248b1305e.svg "Repobeats analytics image")
+
 
 ---
 
