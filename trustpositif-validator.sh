@@ -13,8 +13,8 @@
 #                serta cron-friendly.
 # Author       : HARRY DERTIN SUTISNA ALSYUNDAWY
 # Created Date : 07 APRIL 2024
-# Last Modified: 27 JULI 2026
-# Version      : TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27
+# Last Modified: 18 AGUSTUS 2026
+# Version      : TrustPositif_Validator-1.0.4-ALSYUNDAWY-2026-08-18
 # Usage        : bash TrustPositif-Validator.sh
 #
 # TUTORIAL SINGKAT:
@@ -25,18 +25,22 @@
 #   NUM_CORES=8 CHUNK_SIZE=28000 bash TrustPositif-Validator.sh
 #   CUT_SUBDOMAINS=1 bash TrustPositif-Validator.sh
 #
-# DOCNOTE v1.0.3:
-#   Versi 1.0.3 menyempurnakan v1.0.2 dengan optimasi parsing & hardening:
-#   perbaikan urutan sanitasi URL (path/query/hash/AdGuard dipotong sebelum
-#   pemeriksaan port agar domain bertipe 'host:8080/path' tidak terbuang),
-#   penambahan sanitasi sintaks AdGuard/Hosts blocklist (`||`, `*`, leading dots,
-#   suffix `^`, `$options`), pendeteksian IPv6 hosts prefix (`::`, `::1`,
-#   `0:0:0:0:0:0:0:1`, `fe80::`), garansi atomic write lintas filesystem melalui
-#   staging file di OUTPUT_DIR, proteksi SORT_BUFFER persentase pada BSD sort,
-#   serta pemantauan RAM native FreeBSD lengkap di show_system_resources.
+# DOCNOTE v1.0.4:
+#   Versi 1.0.4 menyempurnakan v1.0.3 dengan security audit & hardening:
+#   1. Proteksi tty pada clear screen (hanya dieksekusi jika stdout adalah terminal)
+#      sehingga aman untuk cron job, systemd service, dan redirect log.
+#   2. Dukungan standar NO_COLOR untuk output tanpa kode warna ANSI pada pipeline.
+#   3. Pengaturan izin file eksplisit (chmod 644) pada file output final agar selalu
+#      dapat dibaca oleh service DNS/Web server meskipun umask sistem restriktif.
+#   4. Penguatan sanitasi CRLF (\r) langsung di awal pemrosesan record AWK untuk
+#      menjamin kebersihan payload unduhan berformat DOS/Windows.
+#   5. Perluasan pembersihan simbol prefix (@, *, |, .) pada AWK blocklist parser.
+#   6. Optimasi deduplikasi path pembersihan pada fungsi force_cleanup.
 # ============================================================
 
-clear 2>/dev/null || true
+if [[ -t 1 && -z ${NO_COLOR-} ]]; then
+	clear 2>/dev/null || true
+fi
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -82,9 +86,15 @@ declare -A BG_COLORS=(
 	[BG_CYAN]=$'\e[46m'
 )
 
+# Nonaktifkan warna jika NO_COLOR diset
+if [[ -n ${NO_COLOR-} ]]; then
+	for key in "${!COLORS[@]}"; do COLORS["${key}"]=""; done
+	for key in "${!BG_COLORS[@]}"; do BG_COLORS["${key}"]=""; done
+fi
+
 SCRIPT_NAME="TrustPositif-Validator.sh"
 # --- Versi script ---
-SCRIPT_VERSION="TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27"
+SCRIPT_VERSION="TrustPositif_Validator-1.0.4-ALSYUNDAWY-2026-08-18"
 OUTPUT_DIR="${OUTPUT_DIR:-/var/www/html/trustpositif}"
 VALID_OUTPUT="${OUTPUT_DIR}/domain-trustpositif_valid.txt"
 VALID_OUTPUT_TMP=""
@@ -102,7 +112,7 @@ DOWNLOAD_RETRY_DELAY="${DOWNLOAD_RETRY_DELAY:-15}"
 
 get_total_cores() {
 	local cores
-	cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+	cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)"
 	[[ ${cores} =~ ^[0-9]+$ ]] || cores=1
 	if ((cores < 1)); then cores=1; fi
 	printf '%s\n' "${cores}"
@@ -287,7 +297,7 @@ show_banner() {
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[MAGENTA]}     SCRIPT INI DIBUAT & DIMODIFIKASI OLEH HARRY DS ALSYUNDAWY          ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[YELLOW]}       ALSYUNDAWY@GMAIL.COM | 08568515212 | ALSYUNDAWY.COM              ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[GREEN]}                DIBUAT PADA TANGGAL 07 APRIL 2024                       ${COLORS[CYAN]}##${COLORS[NC]}"
-	printf '%s\n' "${COLORS[CYAN]}##${COLORS[RED]}        DIPERBAIKI / REVISI TERAKHIR PADA TANGGAL 27 JULI 2026           ${COLORS[CYAN]}##${COLORS[NC]}"
+	printf '%s\n' "${COLORS[CYAN]}##${COLORS[RED]}        DIPERBAIKI / REVISI TERAKHIR PADA TANGGAL 18 AGUSTUS 2026        ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}##${COLORS[NC]}                                                                        ${COLORS[CYAN]}##${COLORS[NC]}"
 	printf '%s\n' "${COLORS[CYAN]}############################################################################${COLORS[NC]}"
 	echo ""
@@ -305,7 +315,7 @@ show_banner() {
 	print_colored "YELLOW" "  - Dibuat          : 07 APRIL 2024" "BG_BLUE"
 	print_colored "YELLOW" "  - Versi           : ${SCRIPT_VERSION}" "BG_BLUE"
 	print_colored "YELLOW" "  - Platform        : Linux (semua distro) | macOS | FreeBSD" "BG_BLUE"
-	print_colored "YELLOW" "  - Terakhir Diubah : 27 JULI 2026" "BG_BLUE"
+	print_colored "YELLOW" "  - Terakhir Diubah : 18 AGUSTUS 2026" "BG_BLUE"
 	print_colored "CYAN" "================================================================================" "BG_BLUE"
 }
 
@@ -740,8 +750,17 @@ force_cleanup() {
 			kill "${pid}" 2>/dev/null || true
 		done < <(pgrep -f -- "${SCRIPT_NAME}" 2>/dev/null || true)
 	fi
-	find "${TMPDIR:-/tmp}" /tmp -maxdepth 1 -type d -name "${SCRIPT_BASENAME}.*" -exec rm -rf -- {} + 2>/dev/null || true
-	rm -f -- "${DOMAIN_FILE}" "${VALID_OUTPUT}.tmp" "${VALID_OUTPUT}.tmp."[0-9]* 2>/dev/null || true
+
+	local tmp_dirs=("/tmp")
+	if [[ -n ${TMPDIR-} && ${TMPDIR} != "/tmp" && -d ${TMPDIR} ]]; then
+		tmp_dirs+=("${TMPDIR}")
+	fi
+
+	for tdir in "${tmp_dirs[@]}"; do
+		find "${tdir}" -maxdepth 1 -type d -name "${SCRIPT_BASENAME}.*" -exec rm -rf -- {} + 2>/dev/null || true
+	done
+
+	rm -f -- "${DOMAIN_FILE}" "${VALID_OUTPUT}.tmp"* 2>/dev/null || true
 	log_success "Cleanup selesai. Sistem bersih."
 }
 
@@ -789,6 +808,7 @@ process_chunk() {
     {
         if (length($0) > 512) next
         domain = $0
+        gsub(/\r/, "", domain)
         sub(/^[a-zA-Z]+:\/\//, "", domain)
         gsub(/[ \t]*[#;].*$/, "", domain)
         gsub(/[ \t]*\/\/.*$/, "", domain)
@@ -797,7 +817,7 @@ process_chunk() {
         if (domain == "") next
 
         sub(/^[ \t]*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|::1?|0:0:0:0:0:0:0:1|fe80::[0-9a-fA-F%]+)[ \t]+/, "", domain)
-        sub(/^[*|]+/, "", domain)
+        sub(/^[*|@.]+/, "", domain)
 
         # Pembersihan path, query string, hash, serta opsi AdGuard sebelum penanganan port
         sub(/[\/\^\$\?#].*$/, "", domain)
@@ -906,7 +926,7 @@ main() {
 
 	log_progress "Memproses chunk paralel (${NUM_CORES} Cores)..."
 	# sort -z (NUL-delimited) tidak didukung BSD sort; gunakan pipeline POSIX-compatible.
-	# find -print0 | tr diperlukan untuk nama file dengan spasi (meski tidak diharapkan).
+	# find -print0 | xargs -0 printf | sort menjamin urutan deterministik dan aman spasi.
 	find "${TEMP_DIR}" -type f -name 'chunk_*' ! -name '*.processed' -print0 |
 		xargs -0 printf '%s\n' |
 		sort |
@@ -932,7 +952,9 @@ main() {
 	# meskipun TEMP_DIR dan OUTPUT_DIR berada pada mount point / filesystem yang berbeda.
 	VALID_OUTPUT_TMP="${VALID_OUTPUT}.tmp.$$"
 	cp -f -- "${work_output_tmp}" "${VALID_OUTPUT_TMP}"
+	chmod 644 -- "${VALID_OUTPUT_TMP}" 2>/dev/null || true
 	mv -f -- "${VALID_OUTPUT_TMP}" "${VALID_OUTPUT}"
+	chmod 644 -- "${VALID_OUTPUT}" 2>/dev/null || true
 	VALID_OUTPUT_TMP=""
 
 	final_count=$(wc -l <"${VALID_OUTPUT}")
@@ -997,6 +1019,20 @@ CARA PENGGUNAAN:
   NUM_CORES=8 CHUNK_SIZE=28000 bash TrustPositif-Validator.sh
 
 CHANGELOG:
+  v1.0.4 (18 AGUSTUS 2026) - Security Audit, TTY Guard & Output Permission Hardening:
+    - [SEC]   TTY Guard pada Clear Screen: Proteksi clear screen hanya jika stdout terhubung
+              ke terminal interaktif (isatty), mencegah polusi escape code ANSI pada cron & log.
+    - [SEC]   Dukungan Standar NO_COLOR: Mematuhi spesifikasi no-color.org untuk eksekusi pipeline.
+    - [SEC]   Deterministic Permissions (chmod 644): Menetapkan permission 0644 pada file output
+              akhir agar terbaca oleh DNS server (BIND/Unbound/Pi-hole) dan Web server (Nginx/Apache)
+              meskipun dieksekusi di bawah umask sistem yang restriktif (077/027).
+    - [FIX]   AWK DOS/CRLF Hardening: Menambahkan pembersihan explicit '\r' di awal record AWK
+              chunk parser untuk mencegah kegagalan regex pada blocklist berformat Windows/DOS.
+    - [FIX]   Perluasan Prefix Sanitizer: Sanitasi karakter prefix '@', '*', '|', '.' pada input mentah.
+    - [FIX]   Deduplikasi Path force_cleanup: Mengoptimalkan pemindaian temporary directory agar tidak
+              melakukan scanning ganda pada /tmp.
+    - [LINT]  100% lulus uji ShellCheck tanpa peringatan.
+
   v1.0.3 (27 JULI 2026) - Hardening Validasi Blocklist & Atomic Output:
     - [FIX]   Urutan Sanitasi Path & Port: Memindahkan pemotongan path, query string, hash,
               dan opsi AdGuard (`/`, `^`, `$`, `?`, `#`) sebelum pemeriksaan port dan titik dua.
@@ -1082,7 +1118,7 @@ case "${1-}" in
 esac
 
 # ============================================================
-# AKHIR SCRIPT - TrustPositif-Validator.sh v1.0.3
+# AKHIR SCRIPT - TrustPositif-Validator.sh v1.0.4
 # ============================================================
 
 # ============================================================
@@ -1092,14 +1128,13 @@ esac
 # Script ini telah mengalami perbaikan dan optimasi menyeluruh untuk
 # meningkatkan performa, keamanan, dan kemudahan pemeliharaan:
 #
-# DOCNOTE v1.0.3:
-# +-- Pembersihan path/query/hash/AdGuard (`/`, `^`, `$`, `?`, `#`) dilakukan sebelum penanganan port.
-# +-- Dukungan sanitasi sintaks AdGuard & Hosts blocklist (`||`, `*`, `.`, `^`, `$options`).
-# +-- Filter IPv6 hosts diperluas (`::`, `::1`, `0:0:0:0:0:0:0:1`, `fe80::`).
-# +-- Operasi penggantian file output 100% atomic lintas filesystem via staging file di OUTPUT_DIR.
-# +-- Proteksi otomatis SORT_BUFFER persentase jika dieksekusi dengan BSD sort (macOS/FreeBSD).
-# +-- Pemantauan RAM & Halaman Memori native FreeBSD di show_system_resources.
-# +-- force_cleanup membersihkan direktori temporary pada `$TMPDIR` dan `/tmp`.
+# DOCNOTE v1.0.4:
+# +-- Proteksi TTY pada clear screen (hanya jalan jika stdout terhubung ke terminal).
+# +-- Standar NO_COLOR didukung penuh untuk eksekusi automated pipeline.
+# +-- Pengaturan izin file eksplisit (chmod 644) pada file output akhir untuk DNS/Web Server.
+# +-- Hardening AWK terhadap format Windows/DOS dengan pembersihan eksplisit '\r'.
+# +-- Perluasan pembersihan karakter prefix (@, *, |, .) pada AWK parser.
+# +-- Optimasi scanning direktori temporary pada force_cleanup.
 #
 # OPTIMASI PERFORMA:
 # +-- Deteksi Sumber Daya: kompatibel pada server normal, macOS, dan FreeBSD, proteksi RAM/cgroup untuk mesin kecil.
@@ -1216,7 +1251,7 @@ esac
 #
 # VERIFIKASI INSTALASI:
 # bash TrustPositif-Validator.sh --version
-# # Output: TrustPositif-Validator.sh versi TrustPositif_Validator-1.0.3-ALSYUNDAWY-2026-07-27
+# # Output: TrustPositif-Validator.sh versi TrustPositif_Validator-1.0.4-ALSYUNDAWY-2026-08-18
 #
 # ============================================================
 # KONFIGURASI DINAMIS DAN TUNING
