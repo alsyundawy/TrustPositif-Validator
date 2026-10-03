@@ -1031,6 +1031,7 @@ CHANGELOG:
     - [FIX]   Perluasan Prefix Sanitizer: Sanitasi karakter prefix '@', '*', '|', '.' pada input mentah.
     - [FIX]   Deduplikasi Path force_cleanup: Mengoptimalkan pemindaian temporary directory agar tidak
               melakukan scanning ganda pada /tmp.
+    - [PERF]  Deteksi Core Lintas Platform: Fallback sysctl hw.ncpu untuk deteksi CPU di FreeBSD/macOS.
     - [LINT]  100% lulus uji ShellCheck tanpa peringatan.
 
   v1.0.3 (27 JULI 2026) - Hardening Validasi Blocklist & Atomic Output:

@@ -246,6 +246,8 @@ Community contributions and feedback are welcome:
 
 ## Changelog
 
+Riwayat lengkap perubahan dan catatan rilis terdokumentasi di [CHANGELOG.md](CHANGELOG.md).
+
 ### v1.0.4 — 18 Agustus 2026 — Security Audit, TTY Guard & Output Permission Hardening
 
 - **[SEC]** TTY Guard pada Clear Screen: Proteksi clear screen hanya jika stdout terhubung ke terminal interaktif, mencegah polusi escape code ANSI pada cron & log.
@@ -254,6 +256,7 @@ Community contributions and feedback are welcome:
 - **[FIX]** AWK DOS/CRLF Hardening: Menambahkan pembersihan explicit `\r` di awal record AWK chunk parser untuk mencegah kegagalan regex pada blocklist berformat Windows/DOS.
 - **[FIX]** Perluasan Prefix Sanitizer: Sanitasi karakter prefix `@`, `*`, `|`, `.` pada input mentah.
 - **[FIX]** Deduplikasi Path `force_cleanup`: Mengoptimalkan pemindaian temporary directory agar tidak melakukan scanning ganda pada `/tmp`.
+- **[PERF]** Deteksi Core Lintas Platform (Sysctl Fallback): Menambahkan fallback `sysctl -n hw.ncpu` untuk deteksi CPU di macOS & FreeBSD jika utility nproc/getconf tidak tersedia.
 - **[LINT]** Verified zero warnings on ShellCheck v0.11+.
 
 ### v1.0.3 — 27 Juli 2026 — Hardening Validasi Blocklist & Atomic Output
