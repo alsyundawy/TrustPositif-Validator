@@ -91,7 +91,7 @@ TrustPositif Validator strips out all noise, validates every TLD against the aut
 | Raw Input from Upstream Feed | Transformation Mechanics | Final Clean Output |
 | :--- | :--- | :--- |
 | `https://evil-malware.com:8443/steal.php?id=1#frag` | Strips scheme, port, query string, path, and fragment | `evil-malware.com` |
-| `||tracking-network.net^$third-party` | Strips AdGuard/uBlock filter tokens (`\|\|`, `^`, `$`) | `tracking-network.net` |
+| <code>&#124;&#124;tracking-network.net^$third-party</code> | Strips AdGuard/uBlock filter tokens (<code>&#124;&#124;</code>, <code>^</code>, <code>$</code>) | `tracking-network.net` |
 | `127.0.0.1  telemetry.adservice.org` | Strips hosts file IPv4 prefix and whitespace | `telemetry.adservice.org` |
 | `::1  spyware.analytic.io` | Strips IPv6 loopback prefix (`::1`, `fe80::`) | `spyware.analytic.io` |
 | `contoh-domain.домен.рф` | Converts Unicode IDN via GNU Libidn2 (`idn2`) | `contoh-domain.xn--d1acufc.xn--p1ai` |
@@ -113,7 +113,7 @@ TrustPositif Validator strips out all noise, validates every TLD against the aut
 | **Subdomain Cleaning Engine** | Stream-based AWK hash table lookup for `DOMAINS_TO_CLEAN.txt` | Removes thousands of wild subdomains in &lt;0.3s with zero memory overhead |
 | **Apex Guard (Root Protection)** | Retains the registered root domain when stripping its subdomains | Maintains RPZ zone blocking for parent domains without wasting cache RAM |
 | **Parent Domain Collapse** | Optional ccTLD-aware collapse (`CUT_SUBDOMAINS=1`) | Consolidates deep subdomains to parent SLD/TLD (`.co.id`, `.com.au`, etc.) |
-| **Adaptive Resource Auto-Tuning**| Auto-detects physical RAM, cgroups v1/v2, Darwin sysctl, FreeBSD sysctl | Prevents Out-Of-Memory (OOM) crashes on budget 512MB VPS servers |
+| **Adaptive Resource Auto-Tuning** | Auto-detects physical RAM, cgroups v1/v2, Darwin sysctl, FreeBSD sysctl | Prevents Out-Of-Memory (OOM) crashes on budget 512MB VPS servers |
 | **Parallel Worker Pool** | GNU Parallel with adaptive core clamping (4–32 workers) | Utilizes 100% of host CPU threads for maximum throughput |
 | **Atomic Inode Replacement** | Staging write in target directory + atomic `mv` + `chmod 644` | Zero lock contention or partial read risk for DNS daemons and web servers |
 | **Resilient Networking** | Wget primary with Curl fallback, SSL bypass toggle, and auto-retry | Survives legacy server TLS quirks, handshake timeouts, and network blips |
@@ -363,6 +363,7 @@ Below are production-ready deployment configurations:
 ### Recipe 1: BIND 9 Response Policy Zone (RPZ)
 
 **BIND Configuration (`/etc/bind/named.conf.local`):**
+
 ```bind
 zone "rpz.trustpositif" {
     type master;
@@ -372,6 +373,7 @@ zone "rpz.trustpositif" {
 ```
 
 **Automated RPZ Zone Compiler:**
+
 ```bash
 #!/usr/bin/env bash
 INPUT="/var/www/html/trustpositif/domain-trustpositif_valid.txt"
@@ -413,6 +415,7 @@ unbound-control reload
 1. Open **Pi-hole Admin Console** → **Adlists**.
 2. Add the URL: `http://localhost/trustpositif/domain-trustpositif_valid.txt`.
 3. Rebuild gravity:
+
    ```bash
    pihole -g
    ```
@@ -556,7 +559,7 @@ wc -l /tmp/test_tp/domain-trustpositif_valid.txt
 | **Script hangs or locks up** | Zombie worker process from previous interrupted run | Execute `bash trustpositif-validator.sh --force-cleanup` to kill stale workers and purge `/tmp`. |
 | **Missing GNU Parallel** | Package not installed | Run `sudo apt install -y parallel` or `sudo dnf install -y parallel`. |
 | **`idn2: command not found`** | GNU Libidn2 missing | Run `sudo apt install -y idn2` or `sudo dnf install -y libidn2`. IDN falls back to `idn` or raw domain if absent. |
-| **Download fails with SSL error**| Upstream feed has outdated or self-signed cert | Ensure `CURL_INSECURE=1` is set (default). |
+| **Download fails with SSL error** | Upstream feed has outdated or self-signed cert | Ensure `CURL_INSECURE=1` is set (default). |
 | **OOM on 512MB VPS** | Sort buffer or chunk size too large | Run with `CHUNK_SIZE=5000 SORT_BUFFER=64M bash trustpositif-validator.sh`. |
 | **Permission denied on output** | User lacks write permissions to `/var/www/html` | Run with `sudo` or override output path: `OUTPUT_DIR=$HOME/blocklists bash trustpositif-validator.sh`. |
 
